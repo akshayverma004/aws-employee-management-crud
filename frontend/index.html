@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Employee Management</title>
+  <style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;background:#f3f6fb;color:#172033;margin:0}
+    header{background:#173b70;color:white;padding:24px max(20px,calc((100% - 1050px)/2))}
+    main{max-width:1050px;margin:28px auto;padding:0 18px}.panel{background:white;padding:22px;border-radius:12px;box-shadow:0 4px 18px #14213d12;margin-bottom:20px}
+    h1{margin:0;font-size:25px}h2{margin-top:0}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    input{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:7px;font-size:14px}
+    button{padding:10px 15px;border:0;border-radius:7px;background:#1769aa;color:white;cursor:pointer;margin:3px}
+    button.danger{background:#b42318}button.secondary{background:#64748b}
+    table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:12px;border-bottom:1px solid #e5eaf1}
+    th{background:#f8fafc}.status{margin:10px 0;color:#1769aa;min-height:20px}
+    @media(max-width:700px){.grid{grid-template-columns:1fr}table{font-size:13px}th,td{padding:8px}}
+  </style>
+</head>
+<body>
+<header><h1>Employee Management System</h1><div>Three-tier application hosted on AWS</div></header>
+<main>
+  <section class="panel">
+    <h2 id="formTitle">Add Employee</h2>
+    <form id="employeeForm">
+      <div class="grid">
+        <input id="name" placeholder="Employee name" required>
+        <input id="email" type="email" placeholder="Email address" required>
+        <input id="department" placeholder="Department" required>
+      </div>
+      <p><button type="submit" id="saveButton">Save Employee</button><button type="button" class="secondary" id="cancelButton" hidden>Cancel edit</button></p>
+    </form>
+    <div class="status" id="status"></div>
+  </section>
+  <section class="panel">
+    <h2>Employees</h2>
+    <div style="overflow-x:auto">
+      <table><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Department</th><th>Actions</th></tr></thead>
+      <tbody id="employeeRows"><tr><td colspan="5">Loading...</td></tr></tbody></table>
+    </div>
+  </section>
+</main>
+<script>
+const API = "/api/employees";
+const form = document.getElementById("employeeForm");
+const statusBox = document.getElementById("status");
+let editingId = null, employees = [];
+
+function message(text){ statusBox.textContent = text; }
+function resetForm(){
+  editingId=null; form.reset(); document.getElementById("formTitle").textContent="Add Employee";
+  document.getElementById("saveButton").textContent="Save Employee";
+  document.getElementById("cancelButton").hidden=true;
+}
+async function loadEmployees(){
+  try{
+    const r=await fetch(API); if(!r.ok) throw new Error("API returned "+r.status);
+    employees=await r.json(); const body=document.getElementById("employeeRows"); body.innerHTML="";
+    if(!employees.length){body.innerHTML='<tr><td colspan="5">No employees yet. Add the first employee above.</td></tr>';return;}
+    employees.forEach(e=>{
+      const tr=document.createElement("tr");
+      [e.id,e.name,e.email,e.department].forEach(v=>{const td=document.createElement("td");td.textContent=v;tr.appendChild(td);});
+      const actions=document.createElement("td");
+      const edit=document.createElement("button");edit.textContent="Edit";edit.className="secondary";edit.onclick=()=>editEmployee(e.id);
+      const del=document.createElement("button");del.textContent="Delete";del.className="danger";del.onclick=()=>deleteEmployee(e.id);
+      actions.append(edit,del);tr.appendChild(actions);body.appendChild(tr);
+    });
+  }catch(err){message("Could not load employees: "+err.message);}
+}
+async function editEmployee(id){
+  const e=employees.find(x=>x.id===id); if(!e)return;
+  editingId=id; document.getElementById("name").value=e.name;document.getElementById("email").value=e.email;
+  document.getElementById("department").value=e.department;document.getElementById("formTitle").textContent="Edit Employee";
+  document.getElementById("saveButton").textContent="Update Employee";document.getElementById("cancelButton").hidden=false;
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+async function deleteEmployee(id){
+  if(!confirm("Delete this employee?"))return;
+  try{const r=await fetch(`${API}/${id}`,{method:"DELETE"});if(!r.ok)throw new Error("Delete failed");message("Employee deleted.");await loadEmployees();}
+  catch(err){message(err.message);}
+}
+form.addEventListener("submit",async ev=>{
+  ev.preventDefault(); const payload={name:document.getElementById("name").value.trim(),email:document.getElementById("email").value.trim(),department:document.getElementById("department").value.trim()};
+  try{
+    const r=await fetch(editingId?`${API}/${editingId}`:API,{method:editingId?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    const data=await r.json();if(!r.ok)throw new Error(data.error||"Request failed");
+    message(editingId?"Employee updated.":"Employee added.");resetForm();await loadEmployees();
+  }catch(err){message(err.message);}
+});
+document.getElementById("cancelButton").addEventListener("click",resetForm);
+loadEmployees();
+</script>
+</body>
+</html>
